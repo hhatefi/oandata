@@ -8,7 +8,7 @@ import v20
 class Factory:
     def __init__(self, config_file):
         self._config=configparser.ConfigParser()
-        self._config.read(config_file)
+        self._config.read_file(config_file)
 
     def createContext(self):
         config_default_sec=self._config['DEFAULT'] # the default section of the config

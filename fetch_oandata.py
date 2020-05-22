@@ -62,7 +62,7 @@ def getParser():
     parser.add_argument('instrument', type=str, help='the name of instrument')
     parser.add_argument('from_date', help='from date in format YYYY-MM-DD')
     parser.add_argument('to_date', help='to date in format YYYY-MM-DD')
-    parser.add_argument('--config_file', '-c', type=str, default='.v20.conf', help='the path to the config file. The default is ".v20.conf"')
+    parser.add_argument('--config_file', '-c', type=argparse.FileType('r'), default=None, help='the path to the config file. Giving a proper config file is mandatory.')
     parser.add_argument('--output', '-o', type=str, help='csv output filename')
     parser.add_argument('--granularity', '-g', choices=_GRANULARITY, default='D', help='granularity of historical price')
     parser.add_argument('--price', '-p', choices=_PRICE, default='M', help='Bid, ask or mid prices. The default is mid.')
@@ -74,6 +74,8 @@ def getParser():
 #
 # \param args is the argumnet to be verified
 def verifyArgs(arg):
+    if arg.config_file is None:
+        raise ValueError('No config file is given.')
     from_date=date.fromisoformat(args.from_date)
     to_date=date.fromisoformat(args.to_date)
     if from_date >= to_date or to_date > date.today():
@@ -88,7 +90,7 @@ def verifyArgs(arg):
 # \param args is the input arguments
 def getCandles(args):
     verifyArgs(args)
-    print('[INFO] Reading configurations from "{}"'.format(args.config_file))
+    print('[INFO] Reading configurations from "{}"'.format(args.config_file.name))
     ins=Instrument.fromConfigFile(args.config_file)
     # compute the number of subintervals
     subinterval_num=computesIntervalNum(args.from_date, args.to_date, args.granularity) if args.split is None else args.split
@@ -113,7 +115,9 @@ def getCandles(args):
             print('[ERR] Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s.date(),e.date()))
             raise ValueError('Fetching price data failed. Error:\n{}'.format(exception))
         df_list.append(df)
-    price_data=pd.concat(df_list)
+
+    # concatenates the dataframes, only if at least one of them is not None
+    price_data=pd.DataFrame() if sum([(df is not None)*1 for df in df_list]) == 0 else pd.concat(df_list)
 
     # storing in file
     if args.output is not None:

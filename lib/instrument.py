@@ -40,7 +40,6 @@ class Instrument:
             candleSticksDataFrame['Close']=[cs.bid.c for cs in candleSticks]
             candleSticksDataFrame['Low']=[cs.bid.l for cs in candleSticks]
             candleSticksDataFrame['High']=[cs.bid.h for cs in candleSticks]
-            print(candleSticks[0].bid)
 
         if candleSticks[0].ask is not None:
             candleSticksDataFrame['Open']=[cs.ask.o for cs in candleSticks]
