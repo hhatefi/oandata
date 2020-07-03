@@ -1,11 +1,11 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-import argparse
+import sys, argparse
 from datetime import date
 import pandas as pd
 
-from lib.instrument import Instrument
-
+from oandata.instrument import Instrument
 
 _GRANULARITY = [
     'S5', 'S10', 'S15', 'S30',                   # seconds e.g. S5 denotes 5 second granularity
@@ -73,8 +73,8 @@ def getParser():
 ## verifies the given arguments
 #
 # \param args is the argumnet to be verified
-def verifyArgs(arg):
-    if arg.config_file is None:
+def verifyArgs(args):
+    if args.config_file is None:
         raise ValueError('No config file is given.')
     from_date=date.fromisoformat(args.from_date)
     to_date=date.fromisoformat(args.to_date)
@@ -125,8 +125,18 @@ def getCandles(args):
 
     return price_data
 
-if __name__ == '__main__':
+def main():
     parser=getParser()
     args=parser.parse_args()
     price_df=getCandles(args)
     print(price_df)
+
+    try:
+        pass
+    except Exception as exp:
+        print("[ERR] An error occured: \n {}".format(exp))
+        print("[INFO] To see the list of command line arguments, run the program with `-h`.")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

@@ -1,4 +1,4 @@
-from lib.factory import Factory
+from oandata.factory import Factory
 import pandas as pd
 
 class Instrument:
