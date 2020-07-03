@@ -17,5 +17,6 @@ setup(name='oandata',
       license='MIT',
       packages=['oandata'],
       install_requires=['v20', 'pandas'],
+      entry_points = {'console_scripts': ['fetch_oandata=fetch_oandata:main']},
       include_package_data=True,
       zip_safe=False)
