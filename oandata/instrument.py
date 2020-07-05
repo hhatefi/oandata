@@ -1,5 +1,81 @@
 from oandata.factory import Factory
 import pandas as pd
+from datetime import date
+
+# the set of valid granularities
+GRANULARITY = (
+    'S5', 'S10', 'S15', 'S30',                   # seconds e.g. S5 denotes 5 second granularity
+    'M1', 'M2', 'M4', 'M5', 'M10', 'M15', 'M30', # minutes e.g. M1 denotes one minute granularity
+    'H1', 'H2', 'H3', 'H4', 'H6', 'H8', 'H12',   # hours e.g. H1 denotes one hour granularity
+    'D',                                         # daily
+    'W',                                         # weekly
+    'M',                                         # montly
+)
+
+# the set of valid price types
+PRICE = (
+    'B',  # bid
+    'A',  # ask
+    'M',  # mid
+)
+
+class Constants:
+    DEFAULT_RETRY=3          # the default number of retries when a request fails
+    DEFAULT_GRANULARITY='D'  # the default price granularity
+    DEFAULT_PRICE='M'        # the
+    MAX_CANDLE_STICKS = 2500 # the maximum number of candle sticks allowed in each request
+
+def getGranularityInSec(granularity):
+    """gets the granularity in seconds
+
+    :param granularity: price granularity, which can be one of the
+    granularities defined in `GRANULARITY`
+
+    :type granularity: str
+    :return: the granularity in seconds
+    :rtype: int
+    :raise: ValueError
+    """
+    if granularity not in GRANULARITY:
+        raise ValueError('Unexpected granularity "{0}"'.format(granularity))
+
+    if granularity[0] == 'S':
+        return int(granularity[1:])
+    elif granularity[0] == 'M':
+        return int(granularity[1:]) * 60
+    elif granularity[0] == 'H':
+        return int(granularity[1:]) * 60 * 60
+    elif granularity[0] == 'D':
+        return 60 * 60 * 24
+    elif granularity[0] == 'W':
+        return 60 * 60 * 24 * 7
+    else: # it must be 'M'
+        return 60 * 60 * 24 * 30
+
+def computesIntervalNum(start, end, granularity):
+    """computes the number of splits between `start` and `end`
+
+    If the period between @param start and @param end is long and
+    @param granularity is fine, i.e. historical price data contains
+    lots of candle sticks, oanda will return "Bad Request". To
+    mitigate the problem, the period can be split into several
+    sub-intervals, each holding a fewer candle sticks. The number of
+    candle sticks within each sub-interval is kept at most
+    `Constants.MAX_CANDLE_STICKS` (unless the sub-interval is smaller
+    than a day.) This function computes the number of those
+    sub-intervals.
+
+    :param start: the first day on which price data is downloaded
+    :param end: the last day on which price data is downloaded
+    :param granularity: the granularity of price data
+    :type start: datetime.date
+    :type end: dattime.date
+    :type granularity: str, it must holds that `granularity in GRANULARITY`
+    """
+    delta=end - start
+    delta_sec=delta.total_seconds()
+    granularity_sec=getGranularityInSec(granularity)
+    return min(int(delta_sec / granularity_sec / Constants.MAX_CANDLE_STICKS) + 1, delta.days)
 
 class Instrument:
     def __init__(self, context):
@@ -7,14 +83,19 @@ class Instrument:
 
     @classmethod
     def fromConfigFile(cls, config_file):
-        factory=Factory(config_file)
+        factory=Factory.fromConfigFile(config_file)
         return cls(factory.createContext())
+
+    @classmethod
+    def fromConfigDict(cls, config_dict):
+        factory=Factory(config_dict)
+        return cls(factory.createContex())
 
     ## get candles for \param instrument
     # \param instrument is the name of instrument
     # \param kwargs are the argument controlling the retrieved data
     # \return a list of candle sticks
-    def getCandles(self, instrument, **kwargs):
+    def _getCandles(self, instrument, **kwargs):
         # The following function send a GET request and then process,
         # fill out and return the response.
         resp=self._context.instrument.candles(instrument, **kwargs)
@@ -55,3 +136,105 @@ class Instrument:
         candleSticksDataFrame['Volume']=[cs.volume for cs in candleSticks]
         candleSticksDataFrame['Complete']=[cs.complete for cs in candleSticks]
         return pd.DataFrame(candleSticksDataFrame, index=indexes)
+
+    @staticmethod
+    def _verifyAndConvertGetCandleArgs(instrument, from_date, to_date,
+                            granularity, price, split, retry, **kwargs):
+        """verifies the arguments given to `getCandle` function and apply conversions if necessary
+
+        This function get all the arguments given to `getCandle`,
+        evaluates them to check if they are valid and converts them if
+        a conversion is necessary. See the doc of `getCandle` for in
+        detail description of the arguments.
+
+        :raise: ValueError if the arguments are not valid
+        """
+
+    def getCandles(self, instrument, from_date, to_date,
+                   granularity=Constants.DEFAULT_GRANULARITY,
+                   price=Constants.DEFAULT_PRICE,
+                   split=None, # let the number of subintervals is automatically estimated
+                   retry=Constants.DEFAULT_RETRY, **kwargs):
+
+        """fetch candle data from OANDA with
+
+        This method fetches price of `instrument` within time period
+        `fromTime` to `toTime` and returns the result as `pandas.DataFrame`.
+
+        :param instrument: the name of instrument e.g. 'EUR_USD' or 'DE30_EUR'
+        :param from_date: the first date on which price data is recorded
+        :param to_date: the last date on ehich price data is recorded
+        :param granularity: the frequency of price data
+        :param price: indictes which of bid, ask r mid price is recorded
+        :param split: the number of subintervals
+        :param retry: the maximum number of retries if downloading fails before giving up
+
+        :type instrument: str
+        :type from_date: str of format 'YYYY-MM-DD' or datetime.date
+        :type to_date: str of format 'YYYY-MM-DD' or datetime.date
+        :type granularity: str, must be one of the available options in `GRANULARITY`
+        :type price: str, must be one of the available options in `PRICE`
+        :type split: int, must be positive
+        :type retry: int, must be positive
+        """
+        # step 1: verify and convert arguments
+
+        # check and convert from_date
+        if isinstance(from_date, str):
+            from_date=date.fromisoformat(from_date)
+        elif not isinstance(from_date, date):
+            ValueError("'from_date' must be either a string in 'YYYY-MM-DD' format, or an object of type datetime.date")
+
+        # check and convert to_date
+        if isinstance(to_date, str):
+            to_date=date.fromisoformat(to_date)
+        elif not isinstance(to_date, date):
+            raise ValueError("'to_date' must be either a string in 'YYYY-MM-DD' format, or an object of type datetime.date")
+
+        # check the duration
+        if from_date >= to_date or to_date > date.today():
+            raise ValueError('Invalid date period: \'{0}\' -- \'{1}\''.format(from_date, to_date))
+
+        # check granularity
+        if not isinstance(granularity, str) or granularity not in GRANULARITY:
+            raise ValueError('Given granularity \'{}\' is not supported.'.format(granularity))
+
+        # check price
+        if not isinstance(price, str) or price not in PRICE:
+            raise ValueError('Given price type \'{}\' is not supported.'.format(price))
+
+        # check split
+        if split is not None and (not isinstance(split, int) or split < 1):
+            raise ValueError('Expected a positive split, but {} is given.'.format(self.split))
+
+        # check retry
+        if not isinstance(retry, int) or retry < 1:
+            raise ValueError('Expected a positive parameter for the number of retries, but {} is given.'.format(self.retry))
+
+        # step 2: split the duration into subintervals
+        # compute the number of splits (subintervals of [fromTime, toTime])
+        subinterval_num=computesIntervalNum(from_date, to_date, granularity) if split is None else split
+        print('[INFO] Splitting the period into {} chunk(s)'.format(subinterval_num))
+        subintervals=pd.date_range(start=from_date, end=to_date, periods=subinterval_num+1)
+
+        # step 3: fetching data for each subinterval
+        df_list=[] # the list of dataframes, each holds price data for the corresponding subinterval
+        for s,e in zip(subintervals[:-1], subintervals[1:]):
+            print('[INFO] Fetching data from \'{0}\' to \'{1}\' ...'.format(s.date(),e.date()))
+            exception = None # stores exception that may happen during price data fetch
+            for _ in range(retry):
+                try:
+                    df=self._getCandles(instrument, fromTime=s.date(), toTime=e.date(), granularity=granularity, price=price)
+                except Exception as exp:
+                    print('[WARN] Failed, retry ...')
+                    exception=exp
+                    continue
+                exception=None
+                break
+            if exception is not None:
+                print('[ERR] Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s.date(),e.date()))
+                raise ValueError('Fetching price data failed. Error:\n{}'.format(exception))
+            df_list.append(df)
+
+        # step 4: concatenating the fetched dataframes, only if at least one of them is not None
+        return pd.DataFrame() if sum([(df is not None)*1 for df in df_list]) == 0 else pd.concat(df_list)
