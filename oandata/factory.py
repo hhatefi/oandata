@@ -55,10 +55,16 @@ class Factory:
         	poll_timeout=2
 
         :type config_file: an iterable yielding unicode string
+        :raise ValueError: if some configurations are missing
+        :raise MissingSectionHeaderError: when config file contains no section headers
         """
         config_parser=configparser.ConfigParser()
         config_parser.read_file(config_file)
-        section_default= config_parser['DEFAULT']
+
+        if 'DEFAULT' not in config_parser:
+            raise ValueError('Configuration file has no DEFAULT section.')
+
+        section_default=config_parser['DEFAULT']
         if 'hostname' not in section_default or 'token' not in section_default:
             raise ValueError('Required configuration is missing: hostname and token are required.')
 
@@ -73,6 +79,10 @@ class Factory:
         # set ssl
         if 'ssl' in section_default:
             config['ssl']=section_default.getboolean('ssl')
+
+        # set application name
+        if 'application' in section_default:
+            config['application']=section_default['application']
 
         # set token
         config['token']=section_default['token']

@@ -1,6 +1,11 @@
-from oandata.factory import Factory
-import pandas as pd
 from datetime import date
+import pandas as pd
+import logging
+
+from oandata.factory import Factory
+
+### configure logging
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
 # the set of valid granularities
 GRANULARITY = (
@@ -109,7 +114,7 @@ class Instrument:
         # check the validity of candleSticks, it should be a list of
         # as least one candle stick
         if candleSticks is None or not isinstance(candleSticks, list) or len(candleSticks)==0:
-            print("No result was found or it is invalid")
+            logging.warn("No result was found or it is invalid")
             return None
 
         # convert candleSticks to a dataframe
@@ -137,19 +142,6 @@ class Instrument:
         candleSticksDataFrame['Complete']=[cs.complete for cs in candleSticks]
         return pd.DataFrame(candleSticksDataFrame, index=indexes)
 
-    @staticmethod
-    def _verifyAndConvertGetCandleArgs(instrument, from_date, to_date,
-                            granularity, price, split, retry, **kwargs):
-        """verifies the arguments given to `getCandle` function and apply conversions if necessary
-
-        This function get all the arguments given to `getCandle`,
-        evaluates them to check if they are valid and converts them if
-        a conversion is necessary. See the doc of `getCandle` for in
-        detail description of the arguments.
-
-        :raise: ValueError if the arguments are not valid
-        """
-
     def getCandles(self, instrument, from_date, to_date,
                    granularity=Constants.DEFAULT_GRANULARITY,
                    price=Constants.DEFAULT_PRICE,
@@ -176,6 +168,11 @@ class Instrument:
         :type price: str, must be one of the available options in `PRICE`
         :type split: int, must be positive
         :type retry: int, must be positive
+
+        :raise: ValueError if an argument is not valid or fetching
+        price data failed after retries, BadRequest if the request to
+        v20 REST server is not valid, for instance the instrument name
+        is not valid.
         """
         # step 1: verify and convert arguments
 
@@ -214,25 +211,25 @@ class Instrument:
         # step 2: split the duration into subintervals
         # compute the number of splits (subintervals of [fromTime, toTime])
         subinterval_num=computesIntervalNum(from_date, to_date, granularity) if split is None else split
-        print('[INFO] Splitting the period into {} chunk(s)'.format(subinterval_num))
+        logging.info('Splitting the period into {} chunk(s)'.format(subinterval_num))
         subintervals=pd.date_range(start=from_date, end=to_date, periods=subinterval_num+1)
 
         # step 3: fetching data for each subinterval
         df_list=[] # the list of dataframes, each holds price data for the corresponding subinterval
         for s,e in zip(subintervals[:-1], subintervals[1:]):
-            print('[INFO] Fetching data from \'{0}\' to \'{1}\' ...'.format(s.date(),e.date()))
+            logging.info('Fetching data from \'{0}\' to \'{1}\' ...'.format(s.date(),e.date()))
             exception = None # stores exception that may happen during price data fetch
             for _ in range(retry):
                 try:
                     df=self._getCandles(instrument, fromTime=s.date(), toTime=e.date(), granularity=granularity, price=price)
                 except Exception as exp:
-                    print('[WARN] Failed, retry ...')
+                    logging.warn('Failed, retry ...')
                     exception=exp
                     continue
                 exception=None
                 break
             if exception is not None:
-                print('[ERR] Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s.date(),e.date()))
+                logging.error('Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s.date(),e.date()))
                 raise ValueError('Fetching price data failed. Error:\n{}'.format(exception))
             df_list.append(df)
 

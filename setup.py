@@ -3,9 +3,14 @@
 
 from setuptools import setup
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
 setup(name='oandata',
       version='0.1',
       description='A python wrapper for OANDA v20 API',
+      long_description=long_description,
+      long_description_content_type="text/markdown",
       classifiers=[
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',

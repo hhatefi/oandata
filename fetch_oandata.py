@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, argparse
+import sys, argparse, logging
 import pandas as pd
 from datetime import date
 
 from oandata.instrument import Instrument, Constants, PRICE, GRANULARITY
+
+### configure logging
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
 ## creates a parser
 #
@@ -44,21 +47,6 @@ class ArgumentWrapper:
         self.split=args.split
         self.retry=args.retry
 
-    def isValid(self):
-        """checks if the object contains valid arguments
-
-        :raise: ValueError if the object is invalid
-        """
-        if self.config_file is None:
-            raise ValueError('No config file is given.')
-        if self.from_date >= self.to_date or self.to_date > date.today():
-            raise ValueError('Invalid date period: \'{0}\' -- \'{1}\''.format(args.from_date, args.to_date))
-        if self.split is not None and self.split < 1:
-            raise ValueError('Expected a positive split, but {} is given.'.format(self.split))
-        if self.retry < 1:
-            raise ValueError('Expected a positive parameter for the number of retries, but {} is given.'.format(self.retry))
-        return True
-
     def getArgs(self):
         """make a dictionary of arguments and their values
 
@@ -72,62 +60,6 @@ class ArgumentWrapper:
             'retry':self.retry,
             }
 
-
-## verifies the given arguments
-#
-# \param args is the arguments to be verified
-def verifyArgs(args):
-    if args.config_file is None:
-        raise ValueError('No config file is given.')
-    from_date=date.fromisoformat(args.from_date)
-    to_date=date.fromisoformat(args.to_date)
-    if from_date >= to_date or to_date > date.today():
-        raise ValueError('Invalid date period: \'{0}\' -- \'{1}\''.format(args.from_date, args.to_date))
-    if args.split is not None and args.split < 1:
-        raise ValueError('Expected a positive split, but {} is given.'.format(args.split))
-    if args.retry < 1:
-        raise ValueError('Expected a positive parameter for the number of retries, but {} is given.'.format(args.retry))
-
-## fetch historical price data and optically stores them into a file
-#
-# \param args is the input arguments
-def getCandles(args):
-    #verifyArgs(args)
-    print('[INFO] Reading configurations from "{}"'.format(args.config_file.name))
-    ins=Instrument.fromConfigFile(args.config_file)
-    # compute the number of subintervals
-    subinterval_num=computesIntervalNum(args.from_date, args.to_date, args.granularity) if args.split is None else args.split
-    print('[INFO] Splitting the period into {} chunk(s)'.format(subinterval_num))
-    subintervals=pd.date_range(start=args.from_date, end=args.to_date, periods=subinterval_num+1)
-
-    # fetching data for each subinterval
-    df_list=[]
-    for s,e in zip(subintervals[:-1], subintervals[1:]):
-        print('[INFO] Fetching data from \'{0}\' to \'{1}\' ...'.format(s.date(),e.date()))
-        exception = None # stores exception that may happen during price data fetch
-        for _ in range(args.retry):
-            try:
-                df=ins.getCandles(args.instrument, fromTime=s.date(), toTime=e.date(), granularity=args.granularity, price=args.price)
-            except Exception as exp:
-                print('[WARN] Failed, retry ...')
-                exception=exp
-                continue
-            exception=None
-            break
-        if exception is not None:
-            print('[ERR] Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s.date(),e.date()))
-            raise ValueError('Fetching price data failed. Error:\n{}'.format(exception))
-        df_list.append(df)
-
-    # concatenates the dataframes, only if at least one of them is not None
-    price_data=pd.DataFrame() if sum([(df is not None)*1 for df in df_list]) == 0 else pd.concat(df_list)
-
-    # storing in file
-    if args.output is not None:
-        price_data.to_csv(args.output, sep=',', header=True)
-
-    return price_data
-
 def fetch(args):
     """fetch historical price data and optionally stores them into a file
 
@@ -135,7 +67,7 @@ def fetch(args):
     :type args: ArgumentWrapper
     """
     #verifyArgs(args)
-    print('[INFO] Reading configurations from "{}"'.format(args.config_file.name))
+    logging.info('Reading configurations from "{}"'.format(args.config_file.name))
     ins=Instrument.fromConfigFile(args.config_file)
 
     # get the keyworded arguments to be passed to getCandle
@@ -152,9 +84,9 @@ def fetch(args):
 def main():
     parser=createParser()
     args=ArgumentWrapper(parser.parse_args())
-    # check if the arguments are valid
-    args.isValid()
     price_data=fetch(args)
+
+    logging.info('Printing price data...')
     print(price_data)
 
 if __name__ == '__main__':
