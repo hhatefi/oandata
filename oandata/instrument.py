@@ -94,7 +94,7 @@ class Instrument:
     @classmethod
     def fromConfigDict(cls, config_dict):
         factory=Factory(config_dict)
-        return cls(factory.createContex())
+        return cls(factory.createContext())
 
     ## get candles for \param instrument
     # \param instrument is the name of instrument
