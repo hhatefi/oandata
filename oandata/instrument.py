@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import pandas as pd
 import logging
 
@@ -76,11 +76,35 @@ def computesIntervalNum(start, end, granularity):
     :type start: datetime.date
     :type end: dattime.date
     :type granularity: str, it must holds that `granularity in GRANULARITY`
+    :return: the number of periods
+    :rtype: int
     """
-    delta=end - start
+    delta=end - start + timedelta(days=1)
     delta_sec=delta.total_seconds()
     granularity_sec=getGranularityInSec(granularity)
     return min(int(delta_sec / granularity_sec / Constants.MAX_CANDLE_STICKS) + 1, delta.days)
+
+def getSplits(start, end, splits):
+    """split time interval [start, end] into splits and returns them as a list
+    :param start: the first day in the interval
+    :param end: the last day in the interval
+    :param splits: the number of splits
+    :type start: datetime.date
+    :type end: datetime.date
+    :type splits: positive int
+    :return: the list of pairs of (start,end) for each split
+    :rtype: list
+    """
+    delta=end - start + timedelta(days=1)
+    period=timedelta(seconds=delta.total_seconds() / splits).days
+    d=start
+    sub_int=[]
+    while d <= end:
+        e = min(d + timedelta(days=period), end)
+        sub_int.append((d, e))
+        d = e + timedelta(days=1)
+
+    return sub_int
 
 class Instrument:
     def __init__(self, context):
@@ -96,11 +120,13 @@ class Instrument:
         factory=Factory(config_dict)
         return cls(factory.createContext())
 
-    ## get candles for \param instrument
-    # \param instrument is the name of instrument
-    # \param kwargs are the argument controlling the retrieved data
-    # \return a list of candle sticks
     def _getCandles(self, instrument, **kwargs):
+        """retrieves and returns candle data for an instrument
+        :param instrument: is the name of instrument
+        :param kwargs: the argument controlling the retrieved data that is directly passed to v20.Context.instrument.candles
+        :return: a dataframe of candle sticks
+        :rtype: pandas.DataFrame
+        """
         # The following function send a GET request and then process,
         # fill out and return the response.
         resp=self._context.instrument.candles(instrument, **kwargs)
@@ -145,20 +171,19 @@ class Instrument:
     def getCandles(self, instrument, from_date, to_date,
                    granularity=Constants.DEFAULT_GRANULARITY,
                    price=Constants.DEFAULT_PRICE,
-                   split=None, # let the number of subintervals is automatically estimated
+                   split=None, # let the number of splits is automatically estimated
                    retry=Constants.DEFAULT_RETRY, **kwargs):
-
         """fetch candle data from OANDA with
 
         This method fetches price of `instrument` within time period
-        `fromTime` to `toTime` and returns the result as `pandas.DataFrame`.
+        `from_date` to `to_date` and returns the result as `pandas.DataFrame`.
 
         :param instrument: the name of instrument e.g. 'EUR_USD' or 'DE30_EUR'
         :param from_date: the first date on which price data is recorded
         :param to_date: the last date on ehich price data is recorded
         :param granularity: the frequency of price data
         :param price: indictes which of bid, ask r mid price is recorded
-        :param split: the number of subintervals
+        :param split: the number of splits
         :param retry: the maximum number of retries if downloading fails before giving up
 
         :type instrument: str
@@ -178,13 +203,13 @@ class Instrument:
 
         # check and convert from_date
         if isinstance(from_date, str):
-            from_date=date.fromisoformat(from_date)
+            from_date=pd.Timestamp(from_date).to_pydatetime().date()
         elif not isinstance(from_date, date):
             ValueError("'from_date' must be either a string in 'YYYY-MM-DD' format, or an object of type datetime.date")
 
         # check and convert to_date
         if isinstance(to_date, str):
-            to_date=date.fromisoformat(to_date)
+            to_date=pd.Timestamp(to_date).to_pydatetime().date()
         elif not isinstance(to_date, date):
             raise ValueError("'to_date' must be either a string in 'YYYY-MM-DD' format, or an object of type datetime.date")
 
@@ -208,20 +233,20 @@ class Instrument:
         if not isinstance(retry, int) or retry < 1:
             raise ValueError('Expected a positive parameter for the number of retries, but {} is given.'.format(self.retry))
 
-        # step 2: split the duration into subintervals
-        # compute the number of splits (subintervals of [fromTime, toTime])
-        subinterval_num=computesIntervalNum(from_date, to_date, granularity) if split is None else split
-        logging.info('Splitting the period into {} chunk(s)'.format(subinterval_num))
-        subintervals=pd.date_range(start=from_date, end=to_date, periods=subinterval_num+1)
+        # step 2: split the duration into splits
+        # compute the number of splits (splits of [fromTime, toTime])
+        split_num=computesIntervalNum(from_date, to_date, granularity) if split is None else split
+        logging.info('Splitting the period into {} chunk(s)'.format(split_num))
+        split_intervals=getSplits(start=from_date, end=to_date, splits=split_num+1)
 
-        # step 3: fetching data for each subinterval
-        df_list=[] # the list of dataframes, each holds price data for the corresponding subinterval
-        for s,e in zip(subintervals[:-1], subintervals[1:]):
-            logging.info('Fetching data from \'{0}\' to \'{1}\' ...'.format(s.date(),e.date()))
+        # step 3: fetching data for each split
+        df_list=[] # the list of dataframes, each holds price data for the corresponding split
+        for s,e in split_intervals:
+            logging.info('Fetching data from \'{0}\' to \'{1}\' ...'.format(s,e))
             exception = None # stores exception that may happen during price data fetch
             for _ in range(retry):
                 try:
-                    df=self._getCandles(instrument, fromTime=s.date(), toTime=e.date(), granularity=granularity, price=price)
+                    df=self._getCandles(instrument, fromTime=s, toTime=e, granularity=granularity, price=price)
                 except Exception as exp:
                     logging.warn('Failed, retry ...')
                     exception=exp
@@ -229,7 +254,7 @@ class Instrument:
                 exception=None
                 break
             if exception is not None:
-                logging.error('Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s.date(),e.date()))
+                logging.error('Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s,e))
                 raise ValueError('Fetching price data failed. Error:\n{}'.format(exception))
             df_list.append(df)
 

@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(name='oandata',
-      version='0.1',
+      version='0.2',
       description='A python wrapper for OANDA v20 API',
       long_description=long_description,
       long_description_content_type="text/markdown",
