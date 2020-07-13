@@ -30,6 +30,20 @@ class Constants:
     DEFAULT_PRICE='M'        # the
     MAX_CANDLE_STICKS = 2500 # the maximum number of candle sticks allowed in each request
 
+def isoStrToDate(d):
+    """converts date from iso format to datetime.date
+
+    This method was added since python 3.5 does not provide
+    datetime.date.fromisoformat.
+
+    :param d: date specified in iso format YYYY-MM-DD
+    :type d: str
+    :return: the coverted date object
+    :rtype: datetime.date
+
+    """
+    return pd.Timestamp(d).to_pydatetime().date()
+
 def getGranularityInSec(granularity):
     """gets the granularity in seconds
 
@@ -57,7 +71,7 @@ def getGranularityInSec(granularity):
     else: # it must be 'M'
         return 60 * 60 * 24 * 30
 
-def computesIntervalNum(start, end, granularity):
+def computeIntervalNum(start, end, granularity):
     """computes the number of splits between `start` and `end`
 
     If the period between @param start and @param end is long and
@@ -203,13 +217,13 @@ class Instrument:
 
         # check and convert from_date
         if isinstance(from_date, str):
-            from_date=pd.Timestamp(from_date).to_pydatetime().date()
+            from_date=isoStrToDate(from_date)
         elif not isinstance(from_date, date):
             ValueError("'from_date' must be either a string in 'YYYY-MM-DD' format, or an object of type datetime.date")
 
         # check and convert to_date
         if isinstance(to_date, str):
-            to_date=pd.Timestamp(to_date).to_pydatetime().date()
+            to_date=isoStrToDate(to_date)
         elif not isinstance(to_date, date):
             raise ValueError("'to_date' must be either a string in 'YYYY-MM-DD' format, or an object of type datetime.date")
 
@@ -234,8 +248,8 @@ class Instrument:
             raise ValueError('Expected a positive parameter for the number of retries, but {} is given.'.format(self.retry))
 
         # step 2: split the duration into splits
-        # compute the number of splits (splits of [fromTime, toTime])
-        split_num=computesIntervalNum(from_date, to_date, granularity) if split is None else split
+        # compute the number of splits (splits of [from_date, to_date])
+        split_num=computeIntervalNum(from_date, to_date, granularity) if split is None else split
         logging.info('Splitting the period into {} chunk(s)'.format(split_num))
         split_intervals=getSplits(start=from_date, end=to_date, splits=split_num+1)
 

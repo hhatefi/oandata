@@ -5,7 +5,7 @@ import sys, argparse, logging
 import pandas as pd
 from datetime import date
 
-from oandata.instrument import Instrument, Constants, PRICE, GRANULARITY
+from oandata.instrument import Instrument, Constants, PRICE, GRANULARITY, isoStrToDate
 
 ### configure logging
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
@@ -15,8 +15,8 @@ logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 def createParser():
     parser = argparse.ArgumentParser(description='Fetch historical price data from oanda.')
     parser.add_argument('instrument', type=str, help='the name of instrument')
-    parser.add_argument('from_date', type=lambda d: date.fromisoformat(d), help='from date in format YYYY-MM-DD')
-    parser.add_argument('to_date', type=lambda d: date.fromisoformat(d), help='to date in format YYYY-MM-DD')
+    parser.add_argument('from_date', type=lambda d: isoStrToDate(d), help='from date in format YYYY-MM-DD')
+    parser.add_argument('to_date', type=lambda d: isoStrToDate(d), help='to date in format YYYY-MM-DD')
     parser.add_argument('--config_file', '-c', type=argparse.FileType('r'), default=None, help='the path to the config file. Giving a proper config file is mandatory.')
     parser.add_argument('--output', '-o', type=str, help='csv output filename')
     parser.add_argument('--granularity', '-g', choices=GRANULARITY, default=Constants.DEFAULT_GRANULARITY, help='granularity of historical price')
