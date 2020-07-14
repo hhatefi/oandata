@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(name='oandata',
-      version='0.2',
+      version='0.3',
       description='A python wrapper for OANDA v20 API',
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -22,6 +22,6 @@ setup(name='oandata',
       license='MIT',
       packages=['oandata'],
       install_requires=['v20', 'pandas'],
-      entry_points = {'console_scripts': ['fetch_oandata=fetch_oandata:main']},
+      entry_points={'console_scripts': ['fetch_oandata=oandata.fetcher:main']},
       include_package_data=True,
       zip_safe=False)

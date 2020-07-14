@@ -228,7 +228,7 @@ class Instrument:
             raise ValueError("'to_date' must be either a string in 'YYYY-MM-DD' format, or an object of type datetime.date")
 
         # check the duration
-        if from_date >= to_date or to_date > date.today():
+        if from_date > to_date or to_date > date.today():
             raise ValueError('Invalid date period: \'{0}\' -- \'{1}\''.format(from_date, to_date))
 
         # check granularity
@@ -251,7 +251,7 @@ class Instrument:
         # compute the number of splits (splits of [from_date, to_date])
         split_num=computeIntervalNum(from_date, to_date, granularity) if split is None else split
         logging.info('Splitting the period into {} chunk(s)'.format(split_num))
-        split_intervals=getSplits(start=from_date, end=to_date, splits=split_num+1)
+        split_intervals=getSplits(start=from_date, end=to_date, splits=split_num)
 
         # step 3: fetching data for each split
         df_list=[] # the list of dataframes, each holds price data for the corresponding split
@@ -269,7 +269,7 @@ class Instrument:
                 break
             if exception is not None:
                 logging.error('Fetching data from \'{0}\' to \'{1}\' failed, aborting...'.format(s,e))
-                raise ValueError('Fetching price data failed. Error:\n{}'.format(exception))
+                raise ValueError(str(exception))
             df_list.append(df)
 
         # step 4: concatenating the fetched dataframes, only if at least one of them is not None
